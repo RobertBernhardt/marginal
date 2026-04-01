@@ -73,26 +73,22 @@
         try {
           const data = {
             name: document.getElementById('name').value.trim(),
-            best: document.getElementById('best').value,
-            worst: document.getElementById('worst').value,
-            prob: document.getElementById('prob').value,
-            duration: document.getElementById('duration').value
+            best: parseFloat(document.getElementById('best').value),
+            worst: parseFloat(document.getElementById('worst').value),
+            prob: parseFloat(document.getElementById('prob').value),
+            duration: parseFloat(document.getElementById('duration').value)
           };
           
-          // fix: check for empty strings, not just falsy values (so 0 is allowed)
-          if (data.name === "" || data.best === "" || data.worst === "" || data.prob === "" || data.duration === "") {
-            alert('Please fill in all fields!');
+          // fix: check for empty name or NaN numbers (allows 0)
+          if (data.name === "" || isNaN(data.best) || isNaN(data.worst) || isNaN(data.prob) || isNaN(data.duration)) {
+            alert('Please fill in all fields with valid numbers!');
             return;
           }
 
           // sending type 'new' explicitly to match your doPost logic
           const payload = JSON.stringify({ ...data, type: 'new' });
           
-          alert("Attempting to send payload: " + payload); 
-          
           tg.sendData(payload);
-          
-          alert("tg.sendData called. Closing...");
           tg.close();
         } catch (err) {
           alert("CRITICAL UI ERROR: " + err.message);

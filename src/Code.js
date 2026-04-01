@@ -61,8 +61,15 @@ function doPost(e) {
                   if (next) TelegramService.sendTaskCard(chatId, next, "CONGRATS! NEXT UP");
               }
           } else {
+              LoggerService.log("DATA_RECEIVED", "Processing new task", data);
               const result = TaskService.addTaskFromObject(data);
               TelegramService.sendMessage(chatId, result);
+              
+              // Immediately show the next task to keep the loop going
+              const nextTask = TaskService.findNextTask();
+              if (nextTask) {
+                TelegramService.sendTaskCard(chatId, nextTask, "CONGRATS! NEXT UP");
+              }
           }
       } else if (text === "/start" || text === "help") {
         TelegramService.sendNewTaskForm(chatId); // This sends the keyboard as well

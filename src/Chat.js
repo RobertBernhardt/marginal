@@ -74,9 +74,9 @@ const TelegramService = {
               ]
           ],
           "resize_keyboard": true,
-          "one_time_keyboard": false
+          "one_time_keyboard": true
       };
-      return this.sendMessage(chatId, "Use the keyboard button below to add tasks:", replyMarkup);
+      return this.sendMessage(chatId, "Use the button that just appeared in your menu below:", replyMarkup);
   },
 
   /**
