@@ -44,7 +44,7 @@ const TelegramService = {
                  "<b>Estimate:</b> " + (task.dur || 0) + " min\n" +
                  "<b>Current Score:</b> " + (task.score || 1).toFixed(1);
     
-    const logUrl = CONFIG.WORKER_URL + "?type=log&taskId=" + task.id + "&open=" + task.isOpen;
+    const logUrl = CONFIG.WORKER_URL + "?type=log&taskId=" + task.id + "&open=" + task.isOpen + "&chatId=" + chatId;
     const replyMarkup = {
       "inline_keyboard": [
         [
@@ -63,7 +63,7 @@ const TelegramService = {
    * Sends a button to open the New Task Web App Form using a reply keyboard.
    */
   sendNewTaskForm: function(chatId) {
-      const url = CONFIG.WORKER_URL + "?type=new";
+      const url = CONFIG.WORKER_URL + "?type=new&chatId=" + chatId;
       const replyMarkup = {
           "keyboard": [
               [

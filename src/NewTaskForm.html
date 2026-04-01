@@ -69,6 +69,10 @@
       const tg = window.Telegram.WebApp;
       tg.expand();
 
+      // extract the ID from the URL immediately
+      const params = new URLSearchParams(window.location.search);
+      const chatId = params.get('chatId');
+
       document.getElementById('submit').addEventListener('click', () => {
         try {
           const data = {
@@ -79,17 +83,15 @@
             duration: parseFloat(document.getElementById('duration').value)
           };
           
-          // fix: check for empty name or NaN numbers (allows 0)
           if (data.name === "" || isNaN(data.best) || isNaN(data.worst) || isNaN(data.prob) || isNaN(data.duration)) {
             alert('Fill the fields. 0 is a number.');
             return;
           }
 
-          // sending type 'new' explicitly to match your logic
           const payload = { ...data, type: 'new' };
-          payload.chat_id = tg.initDataUnsafe && tg.initDataUnsafe.user ? tg.initDataUnsafe.user.id : null;
+          // override with the bulletproof URL parameter
+          payload.chat_id = chatId; 
           
-          // Submit directly to your worker URL for immediate feedback
           fetch(window.location.href, {
             method: 'POST',
             body: JSON.stringify(payload)

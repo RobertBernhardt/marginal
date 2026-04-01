@@ -87,10 +87,10 @@
       const params = new URLSearchParams(window.location.search);
       const taskId = params.get('taskId');
       const isOpenEnded = params.get('open') === 'true';
+      const chatId = params.get('chatId');
 
       tg.expand();
 
-      // For open-ended tasks, we usually don't "finish" them
       if (isOpenEnded) {
           document.getElementById('finished').parentElement.classList.add('hidden');
       }
@@ -103,7 +103,7 @@
         const finished = document.getElementById('finished').value === 'yes';
         const data = {
           type: 'log',
-          chat_id: tg.initDataUnsafe && tg.initDataUnsafe.user ? tg.initDataUnsafe.user.id : null,
+          chat_id: chatId, // override with the bulletproof URL parameter
           taskId: taskId,
           worked: document.getElementById('worked').value,
           finished: finished,
@@ -113,7 +113,6 @@
           remM: document.getElementById('remM').value
         };
         
-        // Submit to Cloudflare Worker directly
         fetch(window.location.href, {
           method: 'POST',
           body: JSON.stringify(data)
