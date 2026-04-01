@@ -85,11 +85,19 @@
             return;
           }
 
-          // sending type 'new' explicitly to match your doPost logic
-          const payload = JSON.stringify({ ...data, type: 'new' });
+          // sending type 'new' explicitly to match your logic
+          const payload = { ...data, type: 'new' };
+          payload.chat_id = tg.initDataUnsafe && tg.initDataUnsafe.user ? tg.initDataUnsafe.user.id : null;
           
-          tg.sendData(payload);
-          tg.close();
+          // Use Google's most reliable communication method
+          google.script.run
+            .withSuccessHandler(() => {
+                tg.close();
+            })
+            .withFailureHandler((err) => {
+                alert("Server error: " + err);
+            })
+            .processWebAppForm(payload);
         } catch (e) {
           alert("frontend crash: " + e.message);
         }

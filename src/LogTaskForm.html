@@ -103,6 +103,7 @@
         const finished = document.getElementById('finished').value === 'yes';
         const data = {
           type: 'log',
+          chat_id: tg.initDataUnsafe && tg.initDataUnsafe.user ? tg.initDataUnsafe.user.id : null,
           taskId: taskId,
           worked: document.getElementById('worked').value,
           finished: finished,
@@ -112,10 +113,15 @@
           remM: document.getElementById('remM').value
         };
         
-        if (!data.worked) { alert('Please enter minutes worked!'); return; }
-        
-        tg.sendData(JSON.stringify(data));
-        tg.close();
+        // Use Google's internal API for maximum reliability
+        google.script.run
+          .withSuccessHandler(() => {
+              tg.close();
+          })
+          .withFailureHandler((err) => {
+              alert("Error saving: " + err);
+          })
+          .processWebAppForm(data);
       });
     </script>
   </body>

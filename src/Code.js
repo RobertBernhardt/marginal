@@ -11,10 +11,49 @@ function doGet(e) {
   if (type === 'log') template = 'LogTaskForm';
   
   const html = HtmlService.createTemplateFromFile(template);
+  html.scriptUrl = ScriptApp.getService().getUrl();
   return html.evaluate()
       .addMetaTag('viewport', 'width=device-width, initial-scale=1')
       .setTitle('Marginal Tasker')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL); // this is the key
+}
+
+/**
+ * Handle data sent via google.script.run (Web App Forms)
+ */
+function processWebAppForm(data) {
+  LoggerService.log("WEB_APP_RUN", "Data received via google.script.run", data);
+  
+  const props = PropertiesService.getScriptProperties();
+  const authorizedId = props.getProperty('AUTHORIZED_CHAT_ID');
+  const userId = data.chat_id ? data.chat_id.toString() : null;
+
+  if (authorizedId && userId && userId !== authorizedId) {
+    return "Error: Unauthorized";
+  }
+
+  try {
+    let result = "";
+    if (data.type === 'log') {
+      result = TaskService.processLogForm(data);
+    } else {
+      result = TaskService.addTaskFromObject(data);
+    }
+
+    if (userId) {
+      TelegramService.sendMessage(userId, result);
+      
+      // If adding a new task (or logging), show the next one to keep the loop going
+      const next = TaskService.findNextTask();
+      if (next) {
+        TelegramService.sendTaskCard(userId, next, "CONGRATS! NEXT UP");
+      }
+    }
+    return "Success";
+  } catch (e) {
+    LoggerService.log("WEB_APP_RUN_ERROR", e.toString());
+    return "Error: " + e.toString();
+  }
 }
 
 function doPost(e) {
@@ -36,17 +75,36 @@ function doPost(e) {
 
   try {
     const props = PropertiesService.getScriptProperties();
+    const authorizedId = props.getProperty('AUTHORIZED_CHAT_ID');
 
+    // Case 1: Manual Web App Fetch POST (not a standard Telegram update)
+    if (!update.message && !update.callback_query && update.type) {
+      LoggerService.log("MANUAL_FETCH", "Manual form submission detected", update);
+      
+      const userId = update.chat_id ? update.chat_id.toString() : null;
+      if (authorizedId && userId !== authorizedId) {
+        return ContentService.createTextOutput("Unauthorized");
+      }
+
+      if (update.type === 'log') {
+        const result = TaskService.processLogForm(update);
+        if (userId) TelegramService.sendMessage(userId, result);
+      } else if (update.type === 'new') {
+        const result = TaskService.addTaskFromObject(update);
+        if (userId) TelegramService.sendMessage(userId, result);
+      }
+      return ContentService.createTextOutput("OK");
+    }
+
+    // Case 2: Standard Telegram Message Update
     if (update.message) {
       const chatId = update.message.chat.id.toString();
       const text = update.message.text ? update.message.text.toLowerCase().trim() : "";
-
-      let authorizedId = props.getProperty('AUTHORIZED_CHAT_ID');
       
       if (!authorizedId && (text === "/start" || text === "start")) {
         props.setProperty('AUTHORIZED_CHAT_ID', chatId);
-        authorizedId = chatId;
         TelegramService.sendMessage(chatId, "<b>Auth Successful!</b> You are now the master of this bot.");
+        return ContentService.createTextOutput("OK");
       }
       
       if (authorizedId && chatId !== authorizedId) {

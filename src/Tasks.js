@@ -47,11 +47,19 @@ const TaskService = {
   },
 
   /**
-   * Recalculates MV for all tasks and updates the sheet.
+   * Recalculates MV for all tasks and updates the sheet in a single batch.
    */
   syncAllTasks: function() {
     const tasks = this.getTasks();
-    tasks.forEach(t => this.calculateMV(t, true));
+    if (tasks.length === 0) return;
+
+    // Calculate all MVs without writing to sheet yet
+    const mvValues = tasks.map(t => [this.calculateMV(t, false)]);
+
+    // Perform a single batch update for the entire column
+    const ss = getSpreadsheet();
+    const sheet = ss.getSheetByName(CONFIG.SHEETS.TASKS);
+    sheet.getRange(2, this.COL.MV, mvValues.length, 1).setValues(mvValues);
   },
 
   /**
