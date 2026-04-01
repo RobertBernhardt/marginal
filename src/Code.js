@@ -21,10 +21,8 @@ function doPost(e) {
   let update;
   try {
     update = JSON.parse(e.postData.contents);
-    console.log("Incoming Update: ", JSON.stringify(update));
   } catch (err) {
-    console.error("Failed to parse update contents.");
-    return;
+    return ContentService.createTextOutput("OK");
   }
 
   try {
@@ -34,13 +32,8 @@ function doPost(e) {
       const chatId = update.message.chat.id.toString();
       const text = update.message.text ? update.message.text.toLowerCase().trim() : "";
 
-      // Debug: Send heartbeat for debugging
-      // TelegramService.sendMessage(chatId, "<i>DEBUG: Request received. Processing...</i>");
-
-      // Security check
       let authorizedId = props.getProperty('AUTHORIZED_CHAT_ID');
       
-      // Auto-authorize if the bot is "fresh" and someone sends start
       if (!authorizedId && (text === "/start" || text === "start")) {
         props.setProperty('AUTHORIZED_CHAT_ID', chatId);
         authorizedId = chatId;
@@ -48,11 +41,8 @@ function doPost(e) {
       }
       
       if (authorizedId && chatId !== authorizedId) {
-        return TelegramService.sendMessage(chatId, "Unauthorized user.");
-      }
-
-      // Handle Web App Data (GUI Forms)
-      if (update.message.web_app_data) {
+        TelegramService.sendMessage(chatId, "Unauthorized user.");
+      } else if (update.message.web_app_data) {
           const data = JSON.parse(update.message.web_app_data.data);
           if (data.type === 'log') {
               const result = TaskService.processLogForm(data);
@@ -61,53 +51,50 @@ function doPost(e) {
                   const next = TaskService.findNextTask();
                   if (next) TelegramService.sendTaskCard(chatId, next, "CONGRATS! NEXT UP");
               }
-              return;
           } else {
               const result = TaskService.addTaskFromObject(data);
-              return TelegramService.sendMessage(chatId, result);
+              TelegramService.sendMessage(chatId, result);
           }
-      }
-
-      if (text === "/start" || text === "help") {
+      } else if (text === "/start" || text === "help") {
         TelegramService.sendMessage(chatId, "<b>Welcome!</b>\n- 🎯 <i>next</i>: Show top task.\n- 🆕 <i>new</i>: Add task via form.\n- 📊 <i>summary</i>: See today's value.");
       } else if (text === "next" || text === "continue") {
         const task = TaskService.findNextTask();
-        if (!task) return TelegramService.sendMessage(chatId, "No active tasks.");
-        return TelegramService.sendTaskCard(chatId, task, "PICKED");
+        if (!task) {
+          TelegramService.sendMessage(chatId, "No active tasks.");
+        } else {
+          TelegramService.sendTaskCard(chatId, task, "PICKED");
+        }
       } else if (text === "summary") {
         TaskService.syncAllTasks();
-        return TelegramService.sendDailySummary(chatId);
+        TelegramService.sendDailySummary(chatId);
       } else if (text === "new") {
-        return TelegramService.sendNewTaskForm(chatId);
+        TelegramService.sendNewTaskForm(chatId);
       }
     } else if (update.callback_query) {
       handleCallbackQuery(update.callback_query);
     }
   } catch (error) {
-    console.error("Critical Error in doPost: ", error.toString());
-    // Try to notify the user if we have a chatId
     if (update && update.message) {
       TelegramService.sendMessage(update.message.chat.id.toString(), "⚠️ <b>Error:</b> " + error.toString());
     }
   }
+  
+  // mandatory for GAS web apps
+  return ContentService.createTextOutput("OK");
 }
 
 /**
  * Handle button clicks from Inline Keyboard.
  */
 function handleCallbackQuery(query) {
-  const chatId = query.message.chat.id;
+  const chatId = query.message.chat.id.toString();
   const callbackId = query.id;
   const data = query.data;
 
-  // Pattern: log_[taskId]_[min]
   if (data.startsWith("log_")) {
     const parts = data.split("_");
     const taskId = parts[1];
     const durationMin = parseFloat(parts[2]);
-
-    // Perform the logic: log work and reset score
-    // ... we default remaining time to 0 in this quick-log case
     const sessionValue = TaskService.logWork(taskId, durationMin * 60, 0, null);
     
     TelegramService.answerCallback(callbackId, "Logged " + durationMin + "m! ✅");
@@ -115,21 +102,17 @@ function handleCallbackQuery(query) {
   } else if (data.startsWith("skip_")) {
     const taskId = data.split("_")[1];
     TaskService.resetTaskScore(taskId);
-    
-    // Global escalation: Boost all OTHER tasks when one is skipped
     TaskService.boostAllActiveTasks(taskId);
-    
     TelegramService.answerCallback(callbackId, "Skipped!");
     TelegramService.sendMessage(chatId, "Task skipped. Global priority increased for others.");
 
-    // Help flow: after skipping, show whatever is top now
     const next = TaskService.findNextTask();
     if (next) TelegramService.sendTaskCard(chatId, next, "NEXT UP");
   } else if (data.startsWith("kill_")) {
     const taskId = data.split("_")[1];
     TaskService.killSpecificTask(taskId);
     TelegramService.answerCallback(callbackId, "Killed!");
-    TelegramService.sendMessage(chatId, "Task killed. It will no longer appear.");
+    TelegramService.sendMessage(chatId, "Task killed.");
 
     const next = TaskService.findNextTask();
     if (next) TelegramService.sendTaskCard(chatId, next, "NEXT UP");
