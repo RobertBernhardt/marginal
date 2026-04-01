@@ -37,26 +37,44 @@ const TelegramService = {
   /**
    * Constructs a card (message) for a task instruction.
    */
-  sendTaskCard: function(chatId, task) {
-    const text = "<b>🚀 NEXT TASK: " + task['Name'] + "</b>\n\n" +
+  sendTaskCard: function(chatId, task, context = "FOCUS") {
+    const text = "<b>[" + context + "] " + task['Name'] + "</b>\n\n" +
                  "<i>Focus on this task now.</i>\n" +
                  "━━━━━━━━━━━━━━━━━━━━\n" +
                  "<b>Estimate:</b> " + (task['DurationMin'] || 0) + " min\n" +
                  "<b>Current Score:</b> " + (parseFloat(task['Score']) || 1).toFixed(1);
     
+    const logUrl = ScriptApp.getService().getUrl() + "?type=log&taskId=" + task['ID'] + "&open=" + task['IsOpenEnded'];
     const replyMarkup = {
       "inline_keyboard": [
         [
-          { "text": "✅ Log 15m", "callback_data": "log_" + task['ID'] + "_15" },
-          { "text": "✅ Log 30m", "callback_data": "log_" + task['ID'] + "_30" }
+          { "text": "📝 Log Progress", "web_app": { "url": logUrl } }
         ],
         [
-          { "text": "✅ Log 60m", "callback_data": "log_" + task['ID'] + "_60" },
-          { "text": "🖊️ Custom Log", "callback_data": "custom_" + task['ID'] }
+          { "text": "⏭️ Skip", "callback_data": "skip_" + task['ID'] },
+          { "text": "💀 Kill", "callback_data": "kill_" + task['ID'] }
         ]
       ]
     };
     return this.sendMessage(chatId, text, replyMarkup);
+  },
+
+  /**
+   * Sends a button to open the New Task Web App Form.
+   */
+  sendNewTaskForm: function(chatId) {
+      const url = ScriptApp.getService().getUrl() + "?type=new";
+      const replyMarkup = {
+          "inline_keyboard": [
+              [
+                  { 
+                      "text": "➕ Create New Task", 
+                      "web_app": { "url": url } 
+                  }
+              ]
+          ]
+      };
+      return this.sendMessage(chatId, "Click below to add a new task visually.", replyMarkup);
   },
 
   /**

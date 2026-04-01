@@ -160,6 +160,20 @@ const TaskService = {
   },
 
   /**
+   * Boosts ALL active tasks (except the excluded one) by their individual Marginal Value.
+   */
+  boostAllActiveTasks: function(exceptTaskId) {
+    const tasks = this.getTasks().filter(t => t['Status'] === 'Active');
+    tasks.forEach(t => {
+      if (t['ID'] != exceptTaskId) {
+        const mv = this.calculateMV(t);
+        const currentScore = parseFloat(t['Score']) || 1;
+        this.updateTaskRow(t.rowIndex, { 'Score': currentScore + mv });
+      }
+    });
+  },
+
+  /**
    * Kills bottom X% of tasks based on MV.
    */
   killLowUtilityTasks: function() {
@@ -177,5 +191,117 @@ const TaskService = {
       this.updateTaskRow(t.rowIndex, { 'Status': 'Killed' });
     });
     return toKill;
+  },
+
+  /**
+   * Kills a specific task by ID.
+   */
+  killSpecificTask: function(taskId) {
+    const tasks = this.getTasks();
+    const task = tasks.find(t => t['ID'] == taskId);
+    if (!task) return;
+    this.updateTaskRow(task.rowIndex, { 'Status': 'Killed' });
+    this.syncAllTasks();
+  },
+
+  /**
+   * Adds a new task directly from Telegram input.
+   * Syntax: [Name], [BestCase], [WorstCase], [ProbBest], [DurationMin]
+   */
+  addTask: function(inputStr) {
+    const parts = inputStr.split(',').map(s => s.trim());
+    if (parts.length < 5) {
+      return "⚠️ Format error! Use: \n<code>/new Task Name, Best€, Worst€, Prob(0-1), DurationMin</code>";
+    }
+
+    const name = parts[0];
+    const best = parseFloat(parts[1]);
+    const worst = parseFloat(parts[2]);
+    const prob = parseFloat(parts[3]);
+    const duration = parseFloat(parts[4]);
+
+    if (isNaN(best) || isNaN(worst) || isNaN(prob) || isNaN(duration)) {
+      return "⚠️ One of the values is not a valid number.";
+    }
+
+    const id = Date.now().toString().slice(-6); // Simple random ID
+    const ss = getSpreadsheet();
+    const sheet = ss.getSheetByName(CONFIG.SHEETS.TASKS);
+    
+    // Append to sheet
+    sheet.appendRow([
+        id,
+        name,
+        best,
+        worst,
+        prob,
+        duration,
+        1,       /* Score */
+        "Active",/* Status */
+        false,   /* IsOpenEnded - default */
+        0        /* MV */
+    ]);
+
+    this.syncAllTasks(); // Recalculate MV immediately
+    return "✅ Task '<b>" + name + "</b>' added with ID: " + id;
+  },
+
+  /**
+   * Adds task from a JSON object (Web App Form).
+   */
+  addTaskFromObject: function(data) {
+    const name = data.name;
+    const best = parseFloat(data.best);
+    const worst = parseFloat(data.worst);
+    const prob = parseFloat(data.prob);
+    const duration = parseFloat(data.duration);
+
+    const id = Date.now().toString().slice(-6);
+    const ss = getSpreadsheet();
+    const sheet = ss.getSheetByName(CONFIG.SHEETS.TASKS);
+    
+    sheet.appendRow([ id, name, best, worst, prob, duration, 1, "Active", false, 0 ]);
+    this.syncAllTasks();
+    return "🚀 Successfully created task: <b>" + name + "</b>";
+  },
+
+  /**
+   * Processes data from the LogTask Web App.
+   */
+  processLogForm: function(data) {
+    const taskId = data.taskId;
+    const workedMin = parseFloat(data.worked) || 0;
+    const finished = data.finished;
+    
+    const tasks = this.getTasks();
+    const task = tasks.find(t => t['ID'] == taskId);
+    if (!task) return "Error: Task not found.";
+
+    // Calculate value created (reusing logic from logWork)
+    const sessionValue = this.logWork(taskId, workedMin * 60, 0, null);
+
+    // Update with new valuations if provided
+    const updates = { 'Score': 1 };
+    if (data.newMin) updates['WorstCase'] = parseFloat(data.newMin);
+    if (data.newMax) updates['BestCase'] = parseFloat(data.newMax);
+    
+    const remH = parseFloat(data.remH) || 0;
+    const remM = parseFloat(data.remM) || 0;
+    const totalRemMin = (remH * 60) + remM;
+    if (totalRemMin > 0) updates['DurationMin'] = totalRemMin;
+    if (finished) updates['Status'] = 'Done';
+    
+    // 3. Update task
+    this.updateTaskRow(task.rowIndex, updates);
+
+    // 4. Global escalation: Boost ALL OTHER tasks
+    this.boostAllActiveTasks(taskId);
+    
+    // 5. Final sync
+    this.syncAllTasks();
+
+    return "✅ Progress logged for <b>" + task['Name'] + "</b>.\n" +
+           "🕒 Time: " + workedMin + " min\n" +
+           "💎 Value generated: " + (sessionValue || 0).toFixed(2) + " €";
   }
 };

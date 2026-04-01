@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Log Task</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        background-color: var(--tg-theme-bg-color, #ffffff);
+        color: var(--tg-theme-text-color, #222222);
+        padding: 20px; margin: 0;
+      }
+      .form-group { margin-bottom: 12px; }
+      label { display: block; margin-bottom: 4px; font-weight: bold; font-size: 0.85em; opacity: 0.8; }
+      input, select {
+        width: 100%;
+        padding: 12px;
+        box-sizing: border-box;
+        border: 1px solid #ccc;
+        border-radius: 12px;
+        background-color: var(--tg-theme-secondary-bg-color, #f0f0f0);
+        color: var(--tg-theme-text-color);
+        font-size: 1.05em;
+      }
+      .row { display: flex; gap: 10px; }
+      .col { flex: 1; }
+      button {
+        width: 100%;
+        padding: 16px;
+        background-color: var(--tg-theme-button-color, #3390ec);
+        color: var(--tg-theme-button-text-color, #ffffff);
+        border: none;
+        border-radius: 12px;
+        font-size: 1.1em;
+        font-weight: bold;
+        cursor: pointer;
+        margin-top: 15px;
+      }
+      .hidden { display: none; }
+    </style>
+  </head>
+  <body>
+    <h3 style="margin-top:0">Log Progress</h3>
+    <div class="form-group">
+      <label>Minutes worked</label>
+      <input type="number" id="worked" placeholder="e.g. 25">
+    </div>
+    
+    <div class="form-group">
+      <label>Is the task finished?</label>
+      <select id="finished">
+        <option value="no">No, still in progress</option>
+        <option value="yes">Yes, completed</option>
+      </select>
+    </div>
+
+    <div id="remaining-fields">
+      <div class="row">
+        <div class="form-group col">
+          <label>New Min Value (€)</label>
+          <input type="number" id="newMin" placeholder="Worst case">
+        </div>
+        <div class="form-group col">
+          <label>New Max Value (€)</label>
+          <input type="number" id="newMax" placeholder="Best case">
+        </div>
+      </div>
+      <div class="row">
+        <div class="form-group col">
+          <label>Remaining Hours</label>
+          <input type="number" id="remH" placeholder="0">
+        </div>
+        <div class="form-group col">
+          <label>Remaining Minutes</label>
+          <input type="number" id="remM" placeholder="30">
+        </div>
+      </div>
+    </div>
+
+    <button id="submit">Save & Close</button>
+
+    <script>
+      const tg = window.Telegram.WebApp;
+      const params = new URLSearchParams(window.location.search);
+      const taskId = params.get('taskId');
+      const isOpenEnded = params.get('open') === 'true';
+
+      tg.expand();
+
+      // For open-ended tasks, we usually don't "finish" them
+      if (isOpenEnded) {
+          document.getElementById('finished').parentElement.classList.add('hidden');
+      }
+
+      document.getElementById('finished').addEventListener('change', (e) => {
+          document.getElementById('remaining-fields').style.display = (e.target.value === 'yes' ? 'none' : 'block');
+      });
+
+      document.getElementById('submit').addEventListener('click', () => {
+        const finished = document.getElementById('finished').value === 'yes';
+        const data = {
+          type: 'log',
+          taskId: taskId,
+          worked: document.getElementById('worked').value,
+          finished: finished,
+          newMin: document.getElementById('newMin').value,
+          newMax: document.getElementById('newMax').value,
+          remH: document.getElementById('remH').value,
+          remM: document.getElementById('remM').value
+        };
+        
+        if (!data.worked) { alert('Please enter minutes worked!'); return; }
+        
+        tg.sendData(JSON.stringify(data));
+        tg.close();
+      });
+    </script>
+  </body>
+</html>
