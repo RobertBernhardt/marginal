@@ -2,6 +2,11 @@
  * Task Management Service
  */
 const TaskService = {
+  // column mapping to match your spreadsheet headers exactly
+  COL: {
+    ID: 1, NAME: 2, BEST: 3, WORST: 4, PROB: 5, DUR: 6, SCORE: 7, MV: 8, STATUS: 9, OPEN: 10
+  },
+
   /**
    * Loads all tasks as Objects.
    */
@@ -9,34 +14,34 @@ const TaskService = {
     const ss = getSpreadsheet();
     const sheet = ss.getSheetByName(CONFIG.SHEETS.TASKS);
     const data = sheet.getDataRange().getValues();
-    const headers = data[0];
-    return data.slice(1).map((row, index) => {
-      const task = { rowIndex: index + 2 };
-      headers.forEach((h, i) => { task[h.trim()] = row[i]; });
-      return task;
-    });
+    return data.slice(1).map((row, index) => ({
+      rowIndex: index + 2,
+      id: row[this.COL.ID-1],
+      name: row[this.COL.NAME-1],
+      best: parseFloat(row[this.COL.BEST-1]) || 0,
+      worst: parseFloat(row[this.COL.WORST-1]) || 0,
+      prob: parseFloat(row[this.COL.PROB-1]) || 0,
+      dur: parseFloat(row[this.COL.DUR-1]) || 1, // Avoid division by zero
+      score: parseFloat(row[this.COL.SCORE-1]) || 1,
+      status: row[this.COL.STATUS-1],
+      isOpen: row[this.COL.OPEN-1],
+      mv: parseFloat(row[this.COL.MV-1]) || 0
+    }));
   },
 
   /**
    * Calculates the current Marginal Value of a task.
-   * If writeToSheet is true, it updates the task's row.
    */
   calculateMV: function(task, writeToSheet = false) {
-    const best = parseFloat(task['BestCase']);
-    const worst = parseFloat(task['WorstCase']);
-    const prob = parseFloat(task['ProbBest']);
-    const durationMin = parseFloat(task['DurationMin']);
-    
-    // Validate inputs
-    if (isNaN(best) || isNaN(worst) || isNaN(prob) || isNaN(durationMin) || durationMin <= 0) {
-        return 0;
-    }
+    if (isNaN(task.best) || task.dur <= 0) return 0;
 
-    const expectedValue = (best * prob) + (worst * (1 - prob));
-    const mv = expectedValue / (durationMin / 60);
+    const expectedValue = (task.best * task.prob) + (task.worst * (1 - task.prob));
+    const mv = expectedValue / (task.dur / 60);
 
     if (writeToSheet && task.rowIndex) {
-        this.updateTaskRow(task.rowIndex, { 'MarginalValue': mv });
+        const ss = getSpreadsheet();
+        const sheet = ss.getSheetByName(CONFIG.SHEETS.TASKS);
+        sheet.getRange(task.rowIndex, this.COL.MV).setValue(mv);
     }
     return mv;
   },
@@ -53,9 +58,9 @@ const TaskService = {
    * Finds the active task with the highest current score.
    */
   findNextTask: function() {
-    const tasks = this.getTasks().filter(t => t['Status'] === 'Active');
+    const tasks = this.getTasks().filter(t => t.status === 'Active');
     if (tasks.length === 0) return null;
-    return tasks.reduce((prev, curr) => (parseFloat(prev['Score']) > parseFloat(curr['Score']) ? prev : curr));
+    return tasks.reduce((prev, curr) => (prev.score > curr.score ? prev : curr));
   },
 
   /**
@@ -63,11 +68,11 @@ const TaskService = {
    */
   markTaskAsChosen: function(taskId) {
     const tasks = this.getTasks();
-    const task = tasks.find(t => t['ID'] == taskId);
+    const task = tasks.find(t => t.id == taskId);
     if (!task) return;
     const mv = this.calculateMV(task);
-    const newScore = (parseFloat(task['Score']) || 1) + mv;
-    this.updateTaskRow(task.rowIndex, { 'Score': newScore });
+    const newScore = task.score + mv;
+    this.updateTaskRow(task.rowIndex, { 'SCORE': newScore });
     return task;
   },
 
@@ -76,9 +81,9 @@ const TaskService = {
    */
   resetTaskScore: function(taskId) {
     const tasks = this.getTasks();
-    const task = tasks.find(t => t['ID'] == taskId);
+    const task = tasks.find(t => t.id == taskId);
     if (!task) return;
-    this.updateTaskRow(task.rowIndex, { 'Score': 1 });
+    this.updateTaskRow(task.rowIndex, { 'SCORE': 1 });
   },
 
   /**
@@ -87,9 +92,8 @@ const TaskService = {
   updateTaskRow: function(rowIndex, updates) {
     const ss = getSpreadsheet();
     const sheet = ss.getSheetByName(CONFIG.SHEETS.TASKS);
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
     for (let key in updates) {
-      const colIndex = headers.indexOf(key) + 1;
+      const colIndex = this.COL[key];
       if (colIndex > 0) {
         sheet.getRange(rowIndex, colIndex).setValue(updates[key]);
       }
@@ -101,38 +105,27 @@ const TaskService = {
    */
   logWork: function(taskId, durationSec, remainingMin, newValue) {
     const tasks = this.getTasks();
-    const task = tasks.find(t => t['ID'] == taskId);
+    const task = tasks.find(t => t.id == taskId);
     if (!task) return;
     const durationMin = durationSec / 60;
 
-    const best = parseFloat(task['BestCase']) || 0;
-    const worst = parseFloat(task['WorstCase']) || 0;
-    const prob = parseFloat(task['ProbBest']) || 0;
-    const initialExpectedValue = (best * prob) + (worst * (1 - prob));
-    const initialDuration = parseFloat(task['DurationMin']) || 60;
-    
-    // Total value created = proportional to time, capped at expected value
-    // Though we also need to account for what's already created.
-    // Simplifying: ValueCreated this session = (durationMin / initialDuration) * initialExpectedValue
-    // Actually, user said: "maximum is the maximum expected value for the task"
+    const totalExpectedVal = (task.best * task.prob) + (task.worst * (1 - task.prob));
+    const initialDuration = task.dur || 60;
     
     // Let's find previous work in Log
     const ss = getSpreadsheet();
     const logSheet = ss.getSheetByName(CONFIG.SHEETS.LOG);
     const logData = logSheet.getDataRange().getValues();
-    let totalWorkedBefore = 0;
     let totalValueEarnedBefore = 0;
     for (let i = 1; i < logData.length; i++) {
         if (logData[i][1] == taskId) {
-            totalWorkedBefore += parseFloat(logData[i][2]) || 0;
             totalValueEarnedBefore += parseFloat(logData[i][5]) || 0;
         }
     }
 
-    const totalExpectedVal = (parseFloat(task['BestCase']) * parseFloat(task['ProbBest'])) + (parseFloat(task['WorstCase']) * (1 - parseFloat(task['ProbBest'])));
     const mvPerMin = totalExpectedVal / initialDuration;
-    
     let sessionValue = durationMin * mvPerMin;
+    
     if (totalValueEarnedBefore + sessionValue > totalExpectedVal) {
         sessionValue = Math.max(0, totalExpectedVal - totalValueEarnedBefore);
     }
@@ -147,13 +140,9 @@ const TaskService = {
     ]);
 
     // Update task
-    const updates = { 'Score': 1 };
-    if (remainingMin <= 0 && !task['IsOpenEnded']) {
-        updates['Status'] = 'Done';
-    }
-    if (newValue) {
-        // Technically user might want to re-evaluate best/worst. 
-        // For simplicity, we'll assume newValue just updates the weight if needed
+    const updates = { 'SCORE': 1 };
+    if (remainingMin <= 0 && !task.isOpen) {
+        updates['STATUS'] = 'Done';
     }
     this.updateTaskRow(task.rowIndex, updates);
     return sessionValue;
@@ -163,12 +152,11 @@ const TaskService = {
    * Boosts ALL active tasks (except the excluded one) by their individual Marginal Value.
    */
   boostAllActiveTasks: function(exceptTaskId) {
-    const tasks = this.getTasks().filter(t => t['Status'] === 'Active');
+    const tasks = this.getTasks().filter(t => t.status === 'Active');
     tasks.forEach(t => {
-      if (t['ID'] != exceptTaskId) {
+      if (t.id != exceptTaskId) {
         const mv = this.calculateMV(t);
-        const currentScore = parseFloat(t['Score']) || 1;
-        this.updateTaskRow(t.rowIndex, { 'Score': currentScore + mv });
+        this.updateTaskRow(t.rowIndex, { 'SCORE': t.score + mv });
       }
     });
   },
@@ -177,18 +165,18 @@ const TaskService = {
    * Kills bottom X% of tasks based on MV.
    */
   killLowUtilityTasks: function() {
-    const tasks = this.getTasks().filter(t => t['Status'] === 'Active');
+    const tasks = this.getTasks().filter(t => t.status === 'Active');
     if (tasks.length === 0) return;
 
     // Calculate MV for each and sort
-    tasks.forEach(t => t.mv = this.calculateMV(t));
-    tasks.sort((a, b) => a.mv - b.mv);
+    tasks.forEach(t => t.calculatedMv = this.calculateMV(t));
+    tasks.sort((a, b) => a.calculatedMv - b.calculatedMv);
 
     const killCount = Math.max(CONFIG.MIN_KILL_COUNT, Math.ceil(tasks.length * CONFIG.KILL_PERCENTAGE));
     const toKill = tasks.slice(0, killCount);
 
     toKill.forEach(t => {
-      this.updateTaskRow(t.rowIndex, { 'Status': 'Killed' });
+      this.updateTaskRow(t.rowIndex, { 'STATUS': 'Killed' });
     });
     return toKill;
   },
@@ -198,71 +186,53 @@ const TaskService = {
    */
   killSpecificTask: function(taskId) {
     const tasks = this.getTasks();
-    const task = tasks.find(t => t['ID'] == taskId);
+    const task = tasks.find(t => t.id == taskId);
     if (!task) return;
-    this.updateTaskRow(task.rowIndex, { 'Status': 'Killed' });
+    this.updateTaskRow(task.rowIndex, { 'STATUS': 'Killed' });
     this.syncAllTasks();
   },
 
   /**
    * Adds a new task directly from Telegram input.
-   * Syntax: [Name], [BestCase], [WorstCase], [ProbBest], [DurationMin]
    */
   addTask: function(inputStr) {
     const parts = inputStr.split(',').map(s => s.trim());
-    if (parts.length < 5) {
-      return "⚠️ Format error! Use: \n<code>/new Task Name, Best€, Worst€, Prob(0-1), DurationMin</code>";
-    }
+    if (parts.length < 5) return "⚠️ Format error!";
 
-    const name = parts[0];
-    const best = parseFloat(parts[1]);
-    const worst = parseFloat(parts[2]);
-    const prob = parseFloat(parts[3]);
-    const duration = parseFloat(parts[4]);
-
-    if (isNaN(best) || isNaN(worst) || isNaN(prob) || isNaN(duration)) {
-      return "⚠️ One of the values is not a valid number.";
-    }
-
-    const id = Date.now().toString().slice(-6); // Simple random ID
-    const ss = getSpreadsheet();
-    const sheet = ss.getSheetByName(CONFIG.SHEETS.TASKS);
-    
-    // Append to sheet
-    sheet.appendRow([
-        id,
-        name,
-        best,
-        worst,
-        prob,
-        duration,
-        1,       /* Score */
-        "Active",/* Status */
-        false,   /* IsOpenEnded - default */
-        0        /* MV */
-    ]);
-
-    this.syncAllTasks(); // Recalculate MV immediately
-    return "✅ Task '<b>" + name + "</b>' added with ID: " + id;
+    const data = {
+      name: parts[0],
+      best: parts[1],
+      worst: parts[2],
+      prob: parts[3],
+      duration: parts[4]
+    };
+    return this.addTaskFromObject(data);
   },
 
   /**
    * Adds task from a JSON object (Web App Form).
    */
   addTaskFromObject: function(data) {
-    const name = data.name;
-    const best = parseFloat(data.best);
-    const worst = parseFloat(data.worst);
-    const prob = parseFloat(data.prob);
-    const duration = parseFloat(data.duration);
-
     const id = Date.now().toString().slice(-6);
     const ss = getSpreadsheet();
     const sheet = ss.getSheetByName(CONFIG.SHEETS.TASKS);
     
-    sheet.appendRow([ id, name, best, worst, prob, duration, 1, "Active", false, 0 ]);
+    // fix: append in the correct column order according to COL mapping
+    const row = new Array(10).fill("");
+    row[this.COL.ID-1] = id;
+    row[this.COL.NAME-1] = data.name;
+    row[this.COL.BEST-1] = parseFloat(data.best);
+    row[this.COL.WORST-1] = parseFloat(data.worst);
+    row[this.COL.PROB-1] = parseFloat(data.prob);
+    row[this.COL.DUR-1] = parseFloat(data.duration);
+    row[this.COL.SCORE-1] = 1;
+    row[this.COL.STATUS-1] = "Active";
+    row[this.COL.OPEN-1] = false;
+    row[this.COL.MV-1] = 0;
+
+    sheet.appendRow(row);
     this.syncAllTasks();
-    return "🚀 Successfully created task: <b>" + name + "</b>";
+    return "🚀 Successfully created task: <b>" + data.name + "</b>";
   },
 
   /**
@@ -274,33 +244,26 @@ const TaskService = {
     const finished = data.finished;
     
     const tasks = this.getTasks();
-    const task = tasks.find(t => t['ID'] == taskId);
+    const task = tasks.find(t => t.id == taskId);
     if (!task) return "Error: Task not found.";
 
-    // Calculate value created (reusing logic from logWork)
     const sessionValue = this.logWork(taskId, workedMin * 60, 0, null);
 
-    // Update with new valuations if provided
-    const updates = { 'Score': 1 };
-    if (data.newMin) updates['WorstCase'] = parseFloat(data.newMin);
-    if (data.newMax) updates['BestCase'] = parseFloat(data.newMax);
+    const updates = { 'SCORE': 1 };
+    if (data.newMin) updates['WORST'] = parseFloat(data.newMin);
+    if (data.newMax) updates['BEST'] = parseFloat(data.newMax);
     
     const remH = parseFloat(data.remH) || 0;
     const remM = parseFloat(data.remM) || 0;
     const totalRemMin = (remH * 60) + remM;
-    if (totalRemMin > 0) updates['DurationMin'] = totalRemMin;
-    if (finished) updates['Status'] = 'Done';
+    if (totalRemMin > 0) updates['DUR'] = totalRemMin;
+    if (finished) updates['STATUS'] = 'Done';
     
-    // 3. Update task
     this.updateTaskRow(task.rowIndex, updates);
-
-    // 4. Global escalation: Boost ALL OTHER tasks
     this.boostAllActiveTasks(taskId);
-    
-    // 5. Final sync
     this.syncAllTasks();
 
-    return "✅ Progress logged for <b>" + task['Name'] + "</b>.\n" +
+    return "✅ Progress logged for <b>" + task.name + "</b>.\n" +
            "🕒 Time: " + workedMin + " min\n" +
            "💎 Value generated: " + (sessionValue || 0).toFixed(2) + " €";
   }

@@ -70,21 +70,29 @@
       tg.expand();
 
       document.getElementById('submit').addEventListener('click', () => {
-        const data = {
-          name: document.getElementById('name').value,
-          best: document.getElementById('best').value,
-          worst: document.getElementById('worst').value,
-          prob: document.getElementById('prob').value,
-          duration: document.getElementById('duration').value
-        };
-        
-        if (!data.name || !data.best || !data.worst || !data.prob || !data.duration) {
-          alert('Please fill in all fields!');
-          return;
-        }
+        try {
+          const data = {
+            name: document.getElementById('name').value.trim(),
+            best: document.getElementById('best').value,
+            worst: document.getElementById('worst').value,
+            prob: document.getElementById('prob').value,
+            duration: document.getElementById('duration').value
+          };
+          
+          // fix: check for empty strings, not just falsy values (so 0 is allowed)
+          if (data.name === "" || data.best === "" || data.worst === "" || data.prob === "" || data.duration === "") {
+            alert('Please fill in all fields!');
+            return;
+          }
 
-        tg.sendData(JSON.stringify(data));
-        tg.close();
+          // sending type 'new' explicitly to match your doPost logic
+          const payload = JSON.stringify({ ...data, type: 'new' });
+          
+          tg.sendData(payload);
+          tg.close();
+        } catch (err) {
+          alert("JS Error: " + err.message);
+        }
       });
     </script>
   </body>
