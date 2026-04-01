@@ -49,15 +49,15 @@
     </div>
     <div class="form-group">
       <label>Best Case Value (€)</label>
-      <input type="number" id="best" placeholder="50">
+      <input type="number" id="bestCase" placeholder="50">
     </div>
     <div class="form-group">
       <label>Worst Case Value (€)</label>
-      <input type="number" id="worst" placeholder="5">
+      <input type="number" id="worstCase" placeholder="5">
     </div>
     <div class="form-group">
       <label>Probability of Best Case (0-1)</label>
-      <input type="number" id="prob" step="0.1" placeholder="0.8">
+      <input type="number" id="probability" step="0.1" placeholder="0.8">
     </div>
     <div class="form-group">
       <label>Expected Duration (min)</label>
@@ -73,15 +73,15 @@
         try {
           const data = {
             name: document.getElementById('name').value.trim(),
-            best: parseFloat(document.getElementById('best').value),
-            worst: parseFloat(document.getElementById('worst').value),
-            prob: parseFloat(document.getElementById('prob').value),
+            best: parseFloat(document.getElementById('bestCase').value),
+            worst: parseFloat(document.getElementById('worstCase').value),
+            prob: parseFloat(document.getElementById('probability').value),
             duration: parseFloat(document.getElementById('duration').value)
           };
           
           // fix: check for empty name or NaN numbers (allows 0)
           if (data.name === "" || isNaN(data.best) || isNaN(data.worst) || isNaN(data.prob) || isNaN(data.duration)) {
-            alert('Please fill in all fields with valid numbers!');
+            alert('Fill the fields. 0 is a number.');
             return;
           }
 
@@ -90,8 +90,8 @@
           
           tg.sendData(payload);
           tg.close();
-        } catch (err) {
-          alert("CRITICAL UI ERROR: " + err.message);
+        } catch (e) {
+          alert("frontend crash: " + e.message);
         }
       });
     </script>
