@@ -88,10 +88,14 @@
           // sending type 'new' explicitly to match your doPost logic
           const payload = JSON.stringify({ ...data, type: 'new' });
           
+          alert("Attempting to send payload: " + payload); 
+          
           tg.sendData(payload);
+          
+          alert("tg.sendData called. Closing...");
           tg.close();
         } catch (err) {
-          alert("JS Error: " + err.message);
+          alert("CRITICAL UI ERROR: " + err.message);
         }
       });
     </script>

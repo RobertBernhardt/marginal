@@ -18,10 +18,19 @@ function doGet(e) {
 }
 
 function doPost(e) {
+  LoggerService.log("GAS_ENTRY", "Request received", e.postData.contents);
+  
   let update;
   try {
     update = JSON.parse(e.postData.contents);
+    
+    // log specifically if web_app_data exists
+    if (update.message && update.message.web_app_data) {
+      LoggerService.log("WEB_APP_DATA", "Data received", update.message.web_app_data.data);
+    }
+
   } catch (err) {
+    LoggerService.log("GAS_ERROR_PARSE", err.toString());
     return ContentService.createTextOutput("OK");
   }
 
@@ -75,7 +84,7 @@ function doPost(e) {
       handleCallbackQuery(update.callback_query);
     }
   } catch (error) {
-    console.error("Critical error in doPost: " + error.toString());
+    LoggerService.log("GAS_ERROR_EXEC", error.toString());
     if (update && update.message) {
       TelegramService.sendMessage(update.message.chat.id.toString(), "⚠️ <b>Error:</b> " + error.toString());
     }
