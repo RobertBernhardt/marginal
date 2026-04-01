@@ -89,15 +89,15 @@
           const payload = { ...data, type: 'new' };
           payload.chat_id = tg.initDataUnsafe && tg.initDataUnsafe.user ? tg.initDataUnsafe.user.id : null;
           
-          // Use Google's most reliable communication method
-          google.script.run
-            .withSuccessHandler(() => {
-                tg.close();
-            })
-            .withFailureHandler((err) => {
-                alert("Server error: " + err);
-            })
-            .processWebAppForm(payload);
+          // Submit directly to your worker URL for immediate feedback
+          fetch(window.location.href, {
+            method: 'POST',
+            body: JSON.stringify(payload)
+          }).then(() => {
+            tg.close();
+          }).catch(err => {
+            alert("Submission error: " + err.message);
+          });
         } catch (e) {
           alert("frontend crash: " + e.message);
         }

@@ -7,15 +7,13 @@ function doGet(e) {
   const taskId = e.parameter.taskId || '';
   const open = e.parameter.open || 'false';
   
-  let template = 'NewTaskForm';
-  if (type === 'log') template = 'LogTaskForm';
+  let template = type === 'log' ? 'LogTaskForm' : 'NewTaskForm';
   
   const html = HtmlService.createTemplateFromFile(template);
-  html.scriptUrl = ScriptApp.getService().getUrl();
-  return html.evaluate()
-      .addMetaTag('viewport', 'width=device-width, initial-scale=1')
-      .setTitle('Marginal Tasker')
-      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL); // this is the key
+  // Un-sandboxing fix: Get raw HTML to serve via Cloudflare
+  const content = html.evaluate().getContent();
+  
+  return ContentService.createTextOutput(content);
 }
 
 /**

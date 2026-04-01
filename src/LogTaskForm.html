@@ -113,15 +113,15 @@
           remM: document.getElementById('remM').value
         };
         
-        // Use Google's internal API for maximum reliability
-        google.script.run
-          .withSuccessHandler(() => {
-              tg.close();
-          })
-          .withFailureHandler((err) => {
-              alert("Error saving: " + err);
-          })
-          .processWebAppForm(data);
+        // Submit to Cloudflare Worker directly
+        fetch(window.location.href, {
+          method: 'POST',
+          body: JSON.stringify(data)
+        }).then(() => {
+          tg.close();
+        }).catch(err => {
+          alert('Error saving progress: ' + err.message);
+        });
       });
     </script>
   </body>
