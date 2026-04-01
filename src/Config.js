@@ -6,7 +6,15 @@ const CONFIG = {
   // Read from Google Apps Script Properties
   TELEGRAM_TOKEN: PropertiesService.getScriptProperties().getProperty('TELEGRAM_TOKEN'),
   AUTHORIZED_CHAT_ID: PropertiesService.getScriptProperties().getProperty('AUTHORIZED_CHAT_ID'),
-  SPREADSHEET_ID: PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID') || SpreadsheetApp.getActiveSpreadsheet().getId(),
+  get SPREADSHEET_ID() {
+    const id = PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID');
+    if (id) return id;
+    try {
+      return SpreadsheetApp.getActiveSpreadsheet().getId();
+    } catch (e) {
+      return null;
+    }
+  },
   
   WORKER_URL: 'https://marginalrob.robert-bernhardt93.workers.dev',
   SHEETS: {

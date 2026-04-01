@@ -4,14 +4,10 @@
 
 function doGet(e) {
   const type = e.parameter.type || 'new';
-  const taskId = e.parameter.taskId || '';
-  const open = e.parameter.open || 'false';
+  const filename = type === 'log' ? 'LogTaskForm' : 'NewTaskForm';
   
-  let template = type === 'log' ? 'LogTaskForm' : 'NewTaskForm';
-  
-  const html = HtmlService.createTemplateFromFile(template);
-  // Un-sandboxing fix: Get raw HTML to serve via Cloudflare
-  const content = html.evaluate().getContent();
+  // Directly get the HTML content without server-side evaluation/templates
+  const content = HtmlService.createHtmlOutputFromFile(filename).getContent();
   
   return ContentService.createTextOutput(content).setMimeType(ContentService.MimeType.TEXT);
 }
