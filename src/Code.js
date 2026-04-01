@@ -56,7 +56,8 @@ function doPost(e) {
               TelegramService.sendMessage(chatId, result);
           }
       } else if (text === "/start" || text === "help") {
-        TelegramService.sendMessage(chatId, "<b>Welcome!</b>\n- 🎯 <i>next</i>: Show top task.\n- 🆕 <i>new</i>: Add task via form.\n- 📊 <i>summary</i>: See today's value.");
+        TelegramService.sendNewTaskForm(chatId); // This sends the keyboard as well
+        TelegramService.sendMessage(chatId, "<b>Welcome!</b>\n- 🎯 <i>next</i>: Show top task.\n- 🆕 Add tasks via keyboard button.\n- 📊 <i>summary</i>: See today's value.");
       } else if (text === "next" || text === "continue") {
         const task = TaskService.findNextTask();
         if (!task) {
@@ -74,6 +75,7 @@ function doPost(e) {
       handleCallbackQuery(update.callback_query);
     }
   } catch (error) {
+    console.error("Critical error in doPost: " + error.toString());
     if (update && update.message) {
       TelegramService.sendMessage(update.message.chat.id.toString(), "⚠️ <b>Error:</b> " + error.toString());
     }
@@ -81,6 +83,14 @@ function doPost(e) {
   
   // mandatory for GAS web apps
   return ContentService.createTextOutput("OK");
+}
+
+/**
+ * Manually reset the authentication if needed.
+ */
+function resetAuth() {
+  PropertiesService.getScriptProperties().deleteProperty('AUTHORIZED_CHAT_ID');
+  console.log("Auth cleared. Send /start to your bot now.");
 }
 
 /**
@@ -125,12 +135,12 @@ function handleCallbackQuery(query) {
 // ... Add simple parser if needed
 
 /**
- * Use this to register your webhook and set up your initial triggers.
+ * Use this to set up your triggers. 
+ * NOTE: setWebhook() is NOT called here because you use a Cloudflare proxy.
  */
 function setupSystem() {
-  setWebhook();
   createTriggers();
-  SpreadsheetApp.getUi().alert("✅ System Registered! Webhook linked and Triggers set up.");
+  SpreadsheetApp.getUi().alert("✅ Triggers created! NOTE: Webhook registration skipped. Ensure your Cloudflare Worker is pointing to this script's /exec URL.");
 }
 
 function createTriggers() {
@@ -153,12 +163,13 @@ function createTriggers() {
 }
 
 /**
- * Use this to register your webhook with Telegram.
+ * DANGER: Use this only if you want to bypass your Cloudflare proxy.
  */
 function setWebhook() {
   const url = "https://api.telegram.org/bot" + CONFIG.TELEGRAM_TOKEN + "/setWebhook?url=" + ScriptApp.getService().getUrl();
   const res = UrlFetchApp.fetch(url);
   Logger.log(res.getContentText());
+  SpreadsheetApp.getUi().alert("⚠️ Webhook updated directly to GAS. This may break your Cloudflare proxy!");
 }
 
 /**
@@ -168,7 +179,10 @@ function onOpen() {
   const ui = SpreadsheetApp.getUi();
   ui.createMenu('🚀 Marginal Tasker')
       .addItem('Sync All Marginal Values', 'TaskService.syncAllTasks')
-      .addItem('Full System Setup (Run Me)', 'setupSystem')
+      .addItem('Reset / Clear Auth Lock', 'resetAuth')
+      .addItem('Update Triggers (Safe)', 'setupSystem')
+      .addItem('⚠️ EMERGENCY: Update Webhook (GAS ONLY)', 'setWebhook')
+      .addSeparator()
       .addItem('Run Cleanup Test', 'runPeriodicCleanup')
       .addItem('Run Daily Summary Test', 'runDailySummary')
       .addToUi();

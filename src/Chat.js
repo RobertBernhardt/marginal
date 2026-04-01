@@ -60,21 +60,23 @@ const TelegramService = {
   },
 
   /**
-   * Sends a button to open the New Task Web App Form.
+   * Sends a button to open the New Task Web App Form using a reply keyboard.
    */
   sendNewTaskForm: function(chatId) {
       const url = ScriptApp.getService().getUrl() + "?type=new";
       const replyMarkup = {
-          "inline_keyboard": [
+          "keyboard": [
               [
                   { 
-                      "text": "➕ Create New Task", 
+                      "text": "🆕 Add New Task", 
                       "web_app": { "url": url } 
                   }
               ]
-          ]
+          ],
+          "resize_keyboard": true,
+          "one_time_keyboard": false
       };
-      return this.sendMessage(chatId, "Click below to add a new task visually.", replyMarkup);
+      return this.sendMessage(chatId, "Use the keyboard button below to add tasks:", replyMarkup);
   },
 
   /**
