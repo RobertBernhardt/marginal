@@ -13,7 +13,7 @@ function doGet(e) {
   // Un-sandboxing fix: Get raw HTML to serve via Cloudflare
   const content = html.evaluate().getContent();
   
-  return ContentService.createTextOutput(content);
+  return ContentService.createTextOutput(content).setMimeType(ContentService.MimeType.TEXT);
 }
 
 /**

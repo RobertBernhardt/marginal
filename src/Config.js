@@ -8,6 +8,7 @@ const CONFIG = {
   AUTHORIZED_CHAT_ID: PropertiesService.getScriptProperties().getProperty('AUTHORIZED_CHAT_ID'),
   SPREADSHEET_ID: PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID') || SpreadsheetApp.getActiveSpreadsheet().getId(),
   
+  WORKER_URL: 'https://marginalrob.robert-bernhardt93.workers.dev',
   SHEETS: {
     TASKS: 'Tasks',
     LOG: 'ActivityLog',
