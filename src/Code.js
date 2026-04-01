@@ -11,10 +11,10 @@ function doGet(e) {
   if (type === 'log') template = 'LogTaskForm';
   
   const html = HtmlService.createTemplateFromFile(template);
-  // No need for advanced templates, just static files are fine if we use JS params
   return html.evaluate()
       .addMetaTag('viewport', 'width=device-width, initial-scale=1')
-      .setTitle('Marginal Tasker');
+      .setTitle('Marginal Tasker')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL); // this is the key
 }
 
 function doPost(e) {
